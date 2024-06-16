@@ -54,19 +54,51 @@ impl Folder {
         self.print_tree("", 0);
     }
 
-    pub fn find_by_path(&self, path: &String) -> Option<Item> {
+    pub fn find_file(&self, path: &String) -> Option<Item> {
         let split: Vec<&str> = path.trim().split("/").collect();
-        // println!("{:?}", split);
-        let res = self.find(&split[1..]);
+
+        if split.len() < 2 {
+            return None;
+        }
+        let res = self.rec_find_file(&split[1..]);
 
         res
     }
 
-    fn find(&self, path: &[&str]) -> Option<Item> {
+    pub fn find_folder(&self, path: &String) -> Option<Folder> {
+        let split: Vec<&str> = path.trim().split("/").collect();
+
+        if split.len() == 0 {
+            return None;
+        }
+        let res = self.rec_find_folder(&split[1..]);
+
+        res
+    }
+
+    fn rec_find_folder(&self, path: &[&str]) -> Option<Folder> {
+        if path.len() == 0 {
+            return None;
+        } else if path.len() == 1 {
+            if self.name == path[0] {
+                return Some(self.clone());
+            }
+        }
+
+        for folder in self.folders.iter() {
+            if let Some(folder) = folder.rec_find_folder(&path[1..]) {
+                return Some(folder);
+            }
+        }
+
+        None
+    }
+
+    fn rec_find_file(&self, path: &[&str]) -> Option<Item> {
         if path.len() > 1 {
             for folder in self.folders.iter() {
                 if folder.name == path[0] {
-                    return folder.find(&path[1..]);
+                    return folder.rec_find_file(&path[1..]);
                 }
             }
         } else {

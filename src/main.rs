@@ -1,7 +1,8 @@
-use std::{io::{self, stdin, Error}, path::Path};
+use std::{io::stdin, path::{Path, PathBuf}};
 
 use console::Term;
 use database::Folder;
+use file_util::CryptoInfo;
 
 mod file_util;
 mod database;
@@ -20,65 +21,55 @@ fn print_logo() {
     println!();
 }
 
-fn get_choice() -> io::Result<i32> {
-    println!("1 - Split file");
-    println!("2 - Load file");
-    println!("3 - Exit");
-
-    eprint!(" > ");
-
-    let mut choice = String::new();
-    stdin().read_line(&mut choice)?;
-
-    let i = choice.trim().parse::<i32>();
-
-    match i {
-        Ok(i) => Ok(i),
-        Err(_) => Err(Error::new(io::ErrorKind::InvalidData, "Parsing error")),
-    }
-}
-
-fn process_split_file(db: &mut Folder) {
-    db.print();
-}
-
-fn process_save_file(db: &mut Folder) {
-    clear();
-    db.print();
-    println!();
-    eprint!("Enter file path: ");
-
-    let mut file = String::new();
-    stdin().read_line(&mut file).unwrap();
-
-    let file = db.find_by_path(&file);
-
-    match file {
-        Some(file) => {
-            println!("Found! {:?}", file);
-        },
-        None => {
-            println!("You are stupid bich");
-        }
-    };
-
-    let mut file = String::new();
-    stdin().read_line(&mut file).unwrap();
-}
-
 fn main() {
     Folder::if_not_create(Path::new("database.json"));
     let mut db = Folder::load(Path::new("database.json")).unwrap();
 
+    let mut path = vec!["".to_string()];
+    print_logo();
+
     loop {
-        print_logo();
-        match get_choice() {
-            Ok(1) => process_split_file(&mut db),
-            Ok(2) => process_save_file(&mut db),
-            Ok(3) => break,
-            _e => println!("Are you stupid bich?"),
-        };
+        eprint!("[/{}] # ", path.join("/"));
+
+        let mut cmd = String::new();
+        stdin().read_line(&mut cmd).unwrap();
+        
+        let mut split_cmd = cmd.trim().split_whitespace();
+
+        match split_cmd.next() {
+            Some("ls") => ls_command(&path, &mut db),
+            Some("exit") => break,
+            Some(_u) => println!("Unknown command, type help to list commands"),
+            None => ()
+        }
     }
 
     db.save(Path::new("database.json")).unwrap();
+}
+
+fn ls_command(path: &[String], db: &mut Folder) {
+    let folder = db.find_folder(&format!("/{}", &path.join("/")));
+
+    dbg!(folder);
+}
+
+fn test_split() {
+    let cinfo = CryptoInfo::random();
+
+    let files = file_util::split_file(Path::new("test.rar"), Path::new("temp_db"), &cinfo).unwrap();
+
+    let files: Vec<PathBuf> = files.iter()
+        .map(|p| Path::new("temp_db").join(p))
+        .collect();
+
+    let files_path: Vec<&Path> = files.iter()
+        .map(|p| p.as_path())
+        .collect();
+
+    file_util::concat_files(files_path, Path::new("test2.rar"), &cinfo).unwrap();
+}
+
+fn test_bin2img() {
+    file_util::bin2img(Path::new("test.txt")).unwrap();
+    file_util::img2bin(Path::new("test.txt")).unwrap();
 }

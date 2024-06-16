@@ -9,10 +9,7 @@ use chacha20::cipher::{KeyIvInit, StreamCipher};
 use hex_literal::hex;
 use rand::Rng;
 
-const IMAGE_WIDTH: u32 = 2000; // 3000
-const IMAGE_HEIGHT: u32 = 2000; // 3000
-
-const PART_SIZE: u32 = 3 * IMAGE_WIDTH * IMAGE_HEIGHT - 1;
+const PART_SIZE: u32 = 18 * 1024 * 1024 - 3; // 18 mb
 const BLOCK_SIZE: usize = 1024 * 1024; // 1mb
 
 fn get_random_string(len: u32) -> String {
@@ -31,6 +28,14 @@ fn get_random_string(len: u32) -> String {
     random_string
 }
 
+fn min<T: std::cmp::PartialOrd>(x: T, y: T) -> T {
+    if x < y {
+        x
+    } else {
+        y
+    }
+}
+
 pub fn split_file(file_path: &Path, folder: &Path, cinfo: &CryptoInfo) -> io::Result<Vec<String>> {
     if !folder.exists() {
         fs::create_dir(folder)?;
@@ -46,26 +51,25 @@ pub fn split_file(file_path: &Path, folder: &Path, cinfo: &CryptoInfo) -> io::Re
     let mut reader = BufReader::new(input_file);
 
     let mut bytes_read: u32 = 0;
-    let mut part_number = 1;
 
     // Открываем первый файл для записи
-    let file_name = format!("{}.part", get_random_string(16));
-    eprint!("Division into part {}\r", part_number);
+    let file_name = format!("{}.png", get_random_string(16));
+    dbg!("Open File -------", &file_name);
 
     files.push(file_name.clone());
-    let part_path = folder.join(file_name);
+    let mut part_path = folder.join(file_name);
     let part = File::create(&part_path)?;
     let mut writer = BufWriter::new(part);
 
 
     loop {
         // Читаем данные и записываем в текущий файл части
-        let read = append_crypto(&mut reader, &mut writer, cinfo)?;
+        let read = append_crypto(&mut reader, &mut writer, min(BLOCK_SIZE, (PART_SIZE-bytes_read) as usize), cinfo)?;
 
         // Если достигли конца файла, выходим из цикла
-        if read == 0 || read != BLOCK_SIZE {
+        if read == 0 {
             writer.flush()?;
-            bin2img(&part_path, false)?;
+            bin2img(&part_path)?;
             break;
         }
 
@@ -76,15 +80,13 @@ pub fn split_file(file_path: &Path, folder: &Path, cinfo: &CryptoInfo) -> io::Re
             bytes_read = 0;
 
             writer.flush()?;
-            bin2img(&part_path, true)?;
+            bin2img(&part_path)?;
 
-            part_number += 1;
-            eprint!("Division into part {}\r", part_number);
-
-            let file_name = format!("{}.part", get_random_string(16));
+            let file_name = format!("{}.png", get_random_string(16));
+            dbg!("Open File -------", &file_name);
             files.push(file_name.clone());
 
-            let part_path = folder.join(file_name);
+            part_path = folder.join(file_name);
             let part = File::create(&part_path)?;
             writer = BufWriter::new(part);
         }
@@ -94,17 +96,15 @@ pub fn split_file(file_path: &Path, folder: &Path, cinfo: &CryptoInfo) -> io::Re
     Ok(files)
 }
 
-fn bin2img(file: &Path, use_consts: bool) -> io::Result<()> {
+pub fn bin2img(file: &Path) -> io::Result<()> {
     let file_open = File::open(file)?;
     let file_size = file_open.metadata()?.size();
     let mut reader = BufReader::new(file_open);
 
     let mut pixel: [u8; 3] = [0; 3];
 
-    let size = match use_consts {
-        true => [IMAGE_WIDTH, IMAGE_HEIGHT],
-        false => get_scale(file_size),
-    };
+    let size = get_scale(file_size);
+    dbg!("Bin2Img ----------", size);
 
     let mut img = RgbImage::new(size[0], size[1]);
 
@@ -130,7 +130,7 @@ fn bin2img(file: &Path, use_consts: bool) -> io::Result<()> {
     Ok(())
 }
 
-fn img2bin(file: &Path) -> io::Result<()> {
+pub fn img2bin(file: &Path) -> io::Result<()> {
     let temp_path_str = format!("{}.temp", get_random_string(16));
     let temp_path = Path::new(&temp_path_str);
 
@@ -143,6 +143,8 @@ fn img2bin(file: &Path) -> io::Result<()> {
 
     let width = img.width();
     let height = img.height();
+
+    dbg!("Img2Bin ----------", [width, height]);
 
     let meta = img.get_pixel(width-1, height-1)[0];
 
@@ -217,14 +219,11 @@ pub fn concat_files(files: Vec<&Path>, file: &Path, cinfo: &CryptoInfo) -> io::R
     let concat_file = File::create(file)?;
     let mut writer = BufWriter::new(concat_file);
 
-    let mut part_number = 1;
-
     // Объединяем все части файлов в один
     for part in files {
-        eprint!("Concatination part {}\r", part_number);
         img2bin(part)?;
+        dbg!("Appending: ", part);
         append_all_file_crypto(part, &mut writer, cinfo)?;
-        part_number += 1;
     }
     println!();
 
@@ -237,7 +236,7 @@ fn append_all_file_crypto(part: &Path, file: &mut BufWriter<File>, cinfo: &Crypt
 
     // Читаем данные из части файла и записываем в конечный файл
     loop {
-        if append_crypto(&mut reader, file, cinfo)? == 0 {
+        if append_crypto(&mut reader, file, BLOCK_SIZE, cinfo)? == 0 {
             break;
         }
     }
@@ -246,9 +245,11 @@ fn append_all_file_crypto(part: &Path, file: &mut BufWriter<File>, cinfo: &Crypt
 }
 
 /// Возвращает количество прочитанных байт
-fn append_crypto(from: &mut BufReader<File>, to: &mut BufWriter<File>, cinfo: &CryptoInfo) -> io::Result<usize> {
+fn append_crypto(from: &mut BufReader<File>, to: &mut BufWriter<File>, size: usize, cinfo: &CryptoInfo) -> io::Result<usize> {
     let mut buf: [u8; BLOCK_SIZE] = [0; BLOCK_SIZE];
-    let read = from.read(&mut buf)?;
+    let read = from.read(&mut buf[..size])?;
+
+    dbg!("Append Crypto --->>><<<<---", size, read);
 
     let mut cipher = cinfo.get_cipher();
     cipher.apply_keystream(&mut buf[..read]);
