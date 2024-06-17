@@ -1,4 +1,4 @@
-use std::{fs::{File, OpenOptions}, io::{self, Read, Write}, path::Path};
+use std::{fs::{self, File, OpenOptions}, io::{self, Read, Write}, path::Path};
 
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +48,9 @@ impl Folder {
     
     pub fn save(self, file: &Path) -> io::Result<()> {    
         let js = serde_json::to_vec(&self).unwrap();
+        if file.exists() {
+            fs::remove_file(file)?;
+        }
     
         let mut file = OpenOptions::new()
             .create(true)
@@ -71,8 +74,22 @@ impl Folder {
         None
     }
 
+    pub fn rm_file(&mut self, file: &Item) -> io::Result<()> {
+        if let Some(index) = self.files.iter().position(|item| item.name == file.name) {
+            self.files.remove(index);
+        } else {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "File not found"));
+        }
+    
+        Ok(())
+    }    
+
     // CLI
     pub fn ls(&self) {
+        if self.files.len() == 0 {
+            return;
+        }
+
         for item in self.files.iter() {
             eprint!("{}  ", item.name);
         }

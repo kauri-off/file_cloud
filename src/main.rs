@@ -40,6 +40,7 @@ fn main() {
             Some("ll") => db.ll(),
             Some("save") => split(&mut db, split_cmd.next(), split_cmd.next()),
             Some("load") => concat(&mut db, split_cmd.next(), split_cmd.next()),
+            Some("rm") => rm(&mut db, split_cmd.next()),
             Some("exit") => break,
             Some(_u) => println!("Unknown command, type help to list commands"),
             None => ()
@@ -76,7 +77,7 @@ fn split(db: &mut Folder, from: Option<&str>, to: Option<&str>) {
         Ok(parts) => {
             let item = Item::new(String::from(to), size, parts);
             db.add_item(item);
-            eprint!("\n200 ");
+            eprint!("200 ");
         },
         Err(_) => {
             println!("Error");
@@ -85,11 +86,14 @@ fn split(db: &mut Folder, from: Option<&str>, to: Option<&str>) {
 }
 
 fn concat(db: &mut Folder, from: Option<&str>, to: Option<&str>) {
-    if from == None || to == None {
-        return;
-    }
-    let from = from.unwrap();
-    let to = to.unwrap();
+    let from = match from {
+        Some(t) => t,
+        None => return,
+    };
+    let to = match to {
+        Some(t) => t,
+        None => return,
+    };
 
     let item = match db.get_file(from) {
         Some(item) => item,
@@ -112,11 +116,21 @@ fn concat(db: &mut Folder, from: Option<&str>, to: Option<&str>) {
     let res = file_util::concat_files(files_path, Path::new(to), &cinfo);
 
     match res {
-        Ok(_) => {
-            eprint!("\n200 ");
-        },
-        Err(_) => {
-            println!("Error");
-        },
+        Ok(_) => eprint!("200 "),
+        Err(_) => println!("Error"),
+    }
+}
+
+fn rm(db: &mut Folder, file: Option<&str>) {
+    let file = match file {
+        Some(t) => t,
+        None => return,
+    };
+
+    if let Some(item) = db.get_file(file) {
+        match db.rm_file(&item) {
+            Ok(_) => eprint!("200 "),
+            Err(_) => println!("Error"),
+        }
     }
 }

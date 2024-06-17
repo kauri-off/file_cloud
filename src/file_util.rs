@@ -89,7 +89,6 @@ pub fn split_file(file_path: &Path, folder: &Path, cinfo: &CryptoInfo) -> io::Re
             writer = BufWriter::new(part);
         }
     }
-    println!();
 
     Ok(files)
 }
@@ -216,10 +215,14 @@ pub fn concat_files(files: Vec<&Path>, file: &Path, cinfo: &CryptoInfo) -> io::R
 
     // Объединяем все части файлов в один
     for part in files {
-        img2bin(part)?;
-        append_all_file_crypto(part, &mut writer, cinfo)?;
+        let temp_path_str = format!("{}.temp", get_random_string(16));
+        let temp_path = Path::new(&temp_path_str);
+        
+        fs::copy(part, temp_path)?;
+        img2bin(temp_path)?;
+        append_all_file_crypto(temp_path, &mut writer, cinfo)?;
+        fs::remove_file(temp_path)?;
     }
-    println!();
 
     Ok(())
 }
