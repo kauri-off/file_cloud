@@ -6,8 +6,9 @@ use std::path::Path;
 use image::io::Reader as ImageReader;
 use image::{GenericImageView, Rgb, RgbImage};
 use chacha20::cipher::{KeyIvInit, StreamCipher};
-use hex_literal::hex;
+use sha2::Digest;
 use rand::Rng;
+use sha2::Sha256;
 
 const PART_SIZE: u32 = 18 * 1024 * 1024 - 3; // 18 mb
 const BLOCK_SIZE: usize = 1024 * 1024; // 1mb
@@ -268,16 +269,32 @@ fn _append(from: &mut BufReader<File>, to: &mut BufWriter<File>) -> io::Result<u
 }
 
 pub struct CryptoInfo {
-    key: Vec<u8>, 
-    iv: Vec<u8>
+    key: [u8; 32],
+    iv: [u8; 12]
 }
 
 impl CryptoInfo {
-    pub fn random() -> Self {
-        let key = hex!("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
-        let iv = hex!("000000000000004a00000000");
+    pub fn from_cli() -> Self {
+        let mut key = String::new();
+        eprint!("Enter key: ");
+        io::stdin().read_line(&mut key).expect("Error reading line");
 
-        CryptoInfo { key: key.into(), iv: iv.into() }
+        CryptoInfo::from_string(key)
+    }
+
+    pub fn from_string(key: String) -> Self {
+        let key = key.trim().as_bytes().to_vec();
+
+        let mut hasher = Sha256::new();
+        hasher.update(&key);
+
+        let mut key = [0u8; 32];
+        key.copy_from_slice(&hasher.finalize().to_vec());
+
+        let mut iv = [0u8; 12];
+        iv.copy_from_slice(&key[..12]);
+
+        CryptoInfo { key, iv }
     }
 
     fn get_cipher(&self) -> chacha20::cipher::StreamCipherCoreWrapper<chacha20::ChaChaCore<chacha20::cipher::typenum::UInt<chacha20::cipher::typenum::UInt<chacha20::cipher::typenum::UInt<chacha20::cipher::typenum::UInt<chacha20::cipher::typenum::UTerm, chacha20::cipher::consts::B1>, chacha20::cipher::consts::B0>, chacha20::cipher::consts::B1>, chacha20::cipher::consts::B0>>> {

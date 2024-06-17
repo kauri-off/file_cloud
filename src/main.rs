@@ -69,7 +69,7 @@ fn split(db: &mut Folder, from: Option<&str>, to: Option<&str>) {
         return;
     }
 
-    let cinfo = CryptoInfo::random();
+    let cinfo = CryptoInfo::from_cli();
 
     let parts = file_util::split_file(path, Path::new("temp_db"), &cinfo);
 
@@ -103,7 +103,7 @@ fn concat(db: &mut Folder, from: Option<&str>, to: Option<&str>) {
         }
     };
 
-    let cinfo = CryptoInfo::random();
+    let cinfo = CryptoInfo::from_cli();
 
     let files: Vec<PathBuf> = item.parts_iter()
         .map(|p| Path::new("temp_db").join(p))
