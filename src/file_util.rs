@@ -54,7 +54,6 @@ pub fn split_file(file_path: &Path, folder: &Path, cinfo: &CryptoInfo) -> io::Re
 
     // Открываем первый файл для записи
     let file_name = format!("{}.png", get_random_string(16));
-    dbg!("Open File -------", &file_name);
 
     files.push(file_name.clone());
     let mut part_path = folder.join(file_name);
@@ -83,7 +82,6 @@ pub fn split_file(file_path: &Path, folder: &Path, cinfo: &CryptoInfo) -> io::Re
             bin2img(&part_path)?;
 
             let file_name = format!("{}.png", get_random_string(16));
-            dbg!("Open File -------", &file_name);
             files.push(file_name.clone());
 
             part_path = folder.join(file_name);
@@ -104,7 +102,6 @@ pub fn bin2img(file: &Path) -> io::Result<()> {
     let mut pixel: [u8; 3] = [0; 3];
 
     let size = get_scale(file_size);
-    dbg!("Bin2Img ----------", size);
 
     let mut img = RgbImage::new(size[0], size[1]);
 
@@ -143,8 +140,6 @@ pub fn img2bin(file: &Path) -> io::Result<()> {
 
     let width = img.width();
     let height = img.height();
-
-    dbg!("Img2Bin ----------", [width, height]);
 
     let meta = img.get_pixel(width-1, height-1)[0];
 
@@ -222,7 +217,6 @@ pub fn concat_files(files: Vec<&Path>, file: &Path, cinfo: &CryptoInfo) -> io::R
     // Объединяем все части файлов в один
     for part in files {
         img2bin(part)?;
-        dbg!("Appending: ", part);
         append_all_file_crypto(part, &mut writer, cinfo)?;
     }
     println!();
@@ -248,8 +242,6 @@ fn append_all_file_crypto(part: &Path, file: &mut BufWriter<File>, cinfo: &Crypt
 fn append_crypto(from: &mut BufReader<File>, to: &mut BufWriter<File>, size: usize, cinfo: &CryptoInfo) -> io::Result<usize> {
     let mut buf: [u8; BLOCK_SIZE] = [0; BLOCK_SIZE];
     let read = from.read(&mut buf[..size])?;
-
-    dbg!("Append Crypto --->>><<<<---", size, read);
 
     let mut cipher = cinfo.get_cipher();
     cipher.apply_keystream(&mut buf[..read]);
